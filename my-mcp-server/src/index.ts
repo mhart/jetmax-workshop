@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 // Define our MCP agent with tools
-export class MyMCP extends McpAgent {
+export class MyMCP extends McpAgent<Env> {
   server = new McpServer({
     name: "Authless Calculator",
     version: "1.0.0",
@@ -57,6 +57,41 @@ export class MyMCP extends McpAgent {
             ],
           };
         }
+      }
+    );
+
+    // Zammad search tool
+    this.server.tool(
+      "ticketSearch",
+      { query: z.string() },
+      async ({ query }) => {
+        const ticketSearchEndpoint = new URL(
+          "/api/v1/tickets/search",
+          this.env.ZAMMAD_BASE_URL // "https://my.zammad.com"
+        );
+        ticketSearchEndpoint.searchParams.set("query", query);
+        ticketSearchEndpoint.searchParams.set("per_page", "10");
+
+        // Auth using "HTTP Token Authentication (access token)"
+        const response = await fetch(ticketSearchEndpoint, {
+          headers: {
+            authorization: `Token token=${this.env.ZAMMAD_TOKEN}`,
+          },
+        });
+        const data = (await response.json()) as { id: string; title: string }[];
+        return {
+          content: [
+            {
+              type: "text",
+              text: data
+                .map(
+                  ({ id, title }) =>
+                    `<ticket><id>${id}</id><title>${title}</title></ticket>`
+                )
+                .join("\n\n"),
+            },
+          ],
+        };
       }
     );
 
